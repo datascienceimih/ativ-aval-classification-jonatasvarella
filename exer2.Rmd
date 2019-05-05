@@ -1,0 +1,286 @@
+---
+title: "Atividade avaliativa 2 - Classificação"
+author: "Jonatas Varella"
+date: "30 de abril de 2019"
+output:
+     pdf_document:
+         latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyr)
+library(tidyselect)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(descr)
+library(readr)
+library(texreg)
+```
+
+## Exercício 10
+
+###This question should be answered using the Weekly data set, which is part of the ISLR package. This data is similar in nature to the Smarket data from this chapter’s lab, except that it contains 1,089 weekly returns for 21 years, from the beginning of 1990 to the end of 2010.
+
+**(a) Produce some numerical and graphical summaries of the Weekly data. Do there appear to be any patterns?**
+
+```{r 10a}
+library(ISLR)
+bd = Weekly
+#help("Weekly")
+names(bd)
+summary(bd)
+pairs(bd)
+cor(bd[-9])
+```
+
+*Resposta:*
+
+Observa-se correlação apenas entre as variáveis "Year" e "Volume". Aparentemente, o volume aumenta ao longo dos anos. 
+
+
+**(b) Use the full data set to perform a logistic regression with Direction as the response and the five lag variables plus Volume as predictors. Use the summary function to print the results. Do any of the predictors appear to be statistically significant? If so, which ones?**
+
+
+```{r 10b}
+names(bd)
+reg = glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, data = bd, family = binomial)
+summary(reg)
+```
+
+*Resposta:*
+
+Apenas a variável Lag2 apresenta significância estatística.
+
+**(c) Compute the confusion matrix and overall fraction of correct predictions. Explain what the confusion matrix is telling you about the types of mistakes made by logistic regression.**
+
+```{r 10c}
+reg.probs = predict(reg, type = "response")
+contrasts(bd$Direction)
+dim(bd)
+reg.pred = rep("Down", 1089)
+reg.pred[reg.probs > .5]= "Up"
+
+table(reg.pred, bd$Direction)
+```
+
+*Resposta:*
+
+A diagonal central representa os casos de acerto. Nesse caso, a confusion matrix demonstra que o modelo foi capaz de prever em 557 dias que a direção do mercado foi positiva, e em 54 dias foi negativo. A soma dos dois, 611, representa a quantidade de acerto do modelo. Em contrapartida, o modelo errou em 478 dos dias.
+
+O percentual de acerto é de: 56,1%
+
+**(d) Now fit the logistic regression model using a training data period from 1990 to 2008, with Lag2 as the only predictor. Compute the confusion matrix and the overall fraction of correct predictions for the held out data (that is, the data from 2009 and 2010).**
+
+
+```{r 10d}
+train = (bd$Year <= 2008)
+test = bd[!train, ]
+bd.Direction = bd$Direction[!train]
+reg2 = glm(Direction ~  Lag2, data = bd, family = binomial, subset = train)
+reg2.prob = predict(reg2, test, type = "response")
+reg2.pred = rep("Down", 104)
+reg2.pred[reg2.prob >.5] = "Up"
+table(reg2.pred, bd.Direction)
+```
+
+*Resposta:*
+
+Conforme demonstrado na confusion matrix, o modelo acertou 9 vezes onde o mercado teve a direção "Down" e "56" vezes quando o mercado teve a direção "Up". O modelo acertou em  62,5% das vezes.
+
+**(e) Repeat (d) using LDA.**
+
+
+```{r 10e}
+library(MASS)
+reg.lda = lda(Direction ~  Lag2, data = bd, family = binomial, subset = train)
+reg.lda
+reg.lda.pred = predict(reg.lda, test)
+names(reg.lda.pred)
+lda.class = reg.lda.pred$class
+table(lda.class, bd.Direction)
+mean(lda.class == bd.Direction)
+```
+*Resposta:*
+
+O modelo manteve o percentual de acerto em 62,5%.
+
+
+**(f) Repeat (d) using QDA**
+
+```{r 10f}
+reg.qda = qda(Direction ~ Lag2, data = bd, family = binomial, subset = train)
+reg.qda
+qda.class = predict(reg.qda, test)$class
+table(qda.class, bd.Direction)
+mean(qda.class==bd.Direction)
+```
+
+*Resposta:*
+
+Usando o QDA, a acurácia diminuiu. O resultado foi de 58,6%.
+
+**(h) Which of these methods appears to provide the best results on this data?**
+
+*Resposta:*
+
+Os dois melhores modelos foram a regressão logística e o LDA. Ambos acertam 62,5% das vezes.
+
+## Exercício 11
+
+###In this problem, you will develop a model to predict wheter a given car gets high or low gas mileage based on the Auto data set
+
+**(a) Create a binary variable, mpg01, that contains a 1 if mpg contains a value aboce its median, and a 0 if mpg contains a value below its median. You can compute the median using the median() function. Note tou may find it helpful to use the data.frame() function to create a single data set containing both mpg01 and the other Auto variables**
+
+*Resposta* 
+
+```{r 11a}
+library(ISLR)
+summary(Auto)
+bd = Auto
+class(bd$mpg)
+median(bd$mpg)
+bd = bd %>% mutate(mpg01 = case_when(
+  mpg > median(mpg) ~ 1,
+  mpg <= median(mpg) ~ 0
+))
+```
+
+
+**b) Explore the data graphically in order to investigate the association between mpg01 and the other features. Which of the other features seem most likely to be useful in predicting mpg01? Scatterplots and boxplots may be useful tools to answer this question. Describe your findings ** 
+
+```{r 11b}
+names(bd)
+cor(bd[-9])
+pairs(bd)
+```
+
+*Resposta*
+
+Observa que mpg01 possui uma correlação negativa com as variáveis: "Cylinders", "Displacement", "Horsepower" e "Weigth".
+
+**c) Split the data into a training set and a test set. **
+
+*Resposta*
+
+```{r 11c}
+train = sample(1:nrow(bd), nrow(bd)*.8)
+bd.train = bd[train, ]
+bd.test = bd[-train, ]
+```
+
+**d)Perform LDA on the training data in order to predict mpg01 using the variables that seemed most associated with mpg01 in (b). What is the test error of the model obtained? **
+
+```{r 11d}
+reg.lda = lda(mpg01 ~ cylinders + displacement + horsepower + weight, data = bd.train,
+              family = binomial)
+reg.lda
+lda.class = predict(reg.lda, bd.test)$class
+table(lda.class, bd.test$mpg01)
+mean(lda.class==bd.test$mpg01)
+```
+
+*Resposta*
+
+O percentual de acerto é de 88%
+
+**e)  Perform QDA on the training data in order to predict mpg01 using the variables that seemed most associated with mpg01 in (b). What is the test error of the model obtained? **
+
+```{r 11e}
+reg.qda = qda(mpg01 ~ cylinders + displacement + horsepower + weight, data = bd.train,
+              family = binomial)
+reg.qda
+qda.class = predict(reg.qda, bd.test)$class
+table(qda.class, bd.test$mpg01)
+mean(qda.class==bd.test$mpg01)
+```
+
+*Resposta*
+
+Utilizando o QDA, a taxa de acerto aumentou para 92%.
+
+**f)  Perform logistic regression on the training data in order to predict mpg01 using the variables that seemed most associated with mpg01 in (b). What is the test error of the model obtained? **
+
+```{r 11f}
+reg.lm = glm(mpg01 ~ cylinders + displacement + horsepower + weight, data = bd.train,
+              family = binomial)
+reg.lm
+reg.probs = predict(reg.lm, type = "response", newdata = bd.test)
+dim(bd.test)
+reg.pred = rep(0, 79)
+reg.pred[reg.probs > .5]= 1
+table(reg.pred, bd.test$mpg01)
+mean(reg.pred==bd.test$mpg01)
+```
+
+*Resposta*
+
+Assim como no modelo QDA, a regressão logística também obteve 92% de acerto. 
+
+## Exercício 13
+
+###Using the Boston data set, fit classification models in order to predict whether a given suburb has a crime rate above or below the median. Explore logistic regression, LDA, and KNN models using various subsets of the predictors. Describe your findings.
+
+
+```{r 13}
+bd = Boston
+summary(bd)
+names(bd)
+median(bd$crim)
+bd = bd %>% mutate(crim01 = case_when(
+  crim > median(crim) ~ 1,
+  crim <= median(crim) ~ 0
+))
+train = sample(1:nrow(bd), nrow(bd)*.8)
+bd.train = bd[train, ]
+bd.test = bd[-train, ]
+```
+
+###Logistic Regression
+
+```{r 13lr}
+reg.lm = glm(crim01 ~ zn + indus + chas + nox + rm + age + dis + rad + tax + ptratio +
+               black + lstat + medv, family = binomial, data = bd.train)
+
+reg.probs = predict(reg.lm, bd.test, type = "response")
+dim(bd.test)
+reg.pred = rep(0,102)
+reg.pred[reg.probs > .5] = 1
+table(reg.pred, bd.test$crim01)
+mean(reg.pred == bd.test$crim01)
+
+```
+
+### LDA
+
+```{r 13lda}
+reg.lda = lda(crim01 ~ zn + indus + chas + nox + rm + age + dis + rad + tax + ptratio +
+               black + lstat + medv, family = binomial, data = bd.train)
+reg.lda
+lda.class = predict(reg.lda, bd.test)$class
+table(lda.class, bd.test$crim01)
+mean(lda.class==bd.test$crim01)
+```
+
+### QDA
+
+```{r 13qda}
+reg.qda = qda(crim01 ~ zn + indus + chas + nox + rm + age + dis + rad + tax + ptratio +
+               black + lstat + medv, family = binomial, data = bd.train)
+reg.qda
+qda.class = predict(reg.qda, bd.test)$class
+table(qda.class, bd.test$crim01)
+mean(qda.class==bd.test$crim01)
+```
+
+*Resposta*
+
+Os modelos apresentaram o seguinte resultados: 
+
+Regressão Logística: 88% de acerto;
+QDA: 88% de acerto;
+LDA: 83% de acerto.
+
+Com base nesses dados, podemos dizer que a regressão logística e o QDA obtiveram os melhores resultados e o melhor ajuste. 
+
